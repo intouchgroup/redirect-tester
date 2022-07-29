@@ -20,7 +20,7 @@ const REPORT_FILENAME_SUFFIX_DEFAULT = 'redirects';
 const USER_AGENT_DEFAULT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.70 Safari/537.36';
 const URL_PROTOCOL_REGEX = /^(?:f|ht)tps?\:\/\//;
 const URL_HTTPS_PROTOCOL_REGEX = /^https:\/\//;
-const URL_VALIDATION_REGEX = /^((?:f|ht)tps?:\/\/)?[\w.-]+(?:\.[\w\.-]+)+[\w\-\._~:/?#[\]@!\$&'\(\)\*\+,;=.]+$/;
+const URL_VALIDATION_REGEX = /^((?:f|ht)tps?:\/\/)?[\w.-]+(?:\.[\w\.-]+)+([\w\-\._~:\/?#[\]@!\$&'\(\)\*\+,;=.]|(%\d\d))+$/;
 
 const report: (ProcessedURLData & {
     numberOfRedirects?: number;
@@ -488,19 +488,26 @@ const extractURLsFromSpreadsheet = async (
         codes: [],
     };
 
+    let lastRowNumber = 0;
     worksheet.eachRow((row, rowNumber) => {
         if (doCollectData) {
-            if (!row.getCell(1).text) {
+            if(rowNumber - lastRowNumber >= 3) {
                 doCollectData = false;
                 return;
             }
+            if (!row.getCell(1).text) {
+                // doCollectData = false;
+                return;
+            }
 
-            data.inputURLs.push(row.getCell(1).text);
-            data.inputTargetURLs.push(row.getCell(2).text);
-            data.codes.push(row.getCell(3).text);
+            data.inputURLs.push(row.getCell(1).text.trim());
+            data.inputTargetURLs.push(row.getCell(2).text.trim());
+            data.codes.push(row.getCell(3).text.trim());
+            lastRowNumber = rowNumber
         }
         if (row.getCell(1).text === cellValue) {
             doCollectData = true;
+            lastRowNumber = rowNumber
         }
     });
 
@@ -515,9 +522,10 @@ const extractURLsFromSpreadsheet = async (
                 log.failedToParseFileURLs(inputURL, index);
                 process.exit(1);
             }
-            
-            const targetURL = new URL(data.inputTargetURLs[index]);
-            data.inputURLs[index] = targetURL.protocol + '//' + targetURL.host + inputURL;
+            try {
+                const targetURL = new URL(data.inputTargetURLs[index]);
+                data.inputURLs[index] = targetURL.protocol + '//' + targetURL.host + inputURL;
+            } catch(e) {}
         }
     });
 
